@@ -34,7 +34,7 @@ class MissionConfigDialog:
 
         self.root = tk.Tk()
         self.root.title("🎯 ตั้งค่าภารกิจเล็งเป้าอัตโนมัติ (RoboMaster Mission Setup)")
-        self.root.geometry("580x520")
+        self.root.geometry("640x530")
         self.root.resizable(False, False)
         self.root.configure(bg="#1E1E2E")
 
@@ -69,6 +69,8 @@ class MissionConfigDialog:
             ("🔵 วงกลม สีน้ำเงิน", "Blue", "Circle", "#3498DB"),
             ("🟡 วงกลม สีเหลือง", "Yellow", "Circle", "#F1C40F"),
             ("⬛ สี่เหลี่ยม สีแดง", "Red", "Square", "#FF6666"),
+            ("▰ ผืนผ้านอน สีแดง", "Red", "Rect_H", "#FFAA44"),
+            ("▮ ผืนผ้าตั้ง สีน้ำเงิน", "Blue", "Rect_V", "#44AAFF"),
             ("🎯 ทุกเป้าหมาย (ทุกสี)", "ALL", "ALL", "#00FFAA"),
         ]
 
@@ -78,10 +80,11 @@ class MissionConfigDialog:
             btn = tk.Button(grid, text=label, font=("Tahoma", 9, "bold"), fg=col, bg="#1E1E2E",
                             activebackground="#3A3A55", relief="groove", bd=2, pady=5, cursor="hand2",
                             command=lambda c_val=c, s_val=s: self._set_preset(c_val, s_val))
-            btn.grid(row=i // 3, column=i % 3, padx=4, pady=4, sticky="ew")
+            btn.grid(row=i // 4, column=i % 4, padx=4, pady=4, sticky="ew")
         grid.columnconfigure(0, weight=1)
         grid.columnconfigure(1, weight=1)
         grid.columnconfigure(2, weight=1)
+        grid.columnconfigure(3, weight=1)
 
         # 2. ปรับแต่งสีและรูปทรงอย่างอิสระ
         opt_box = tk.LabelFrame(content, text=" 🎨 หรือปรับแต่งตามต้องการ ",

@@ -5,7 +5,7 @@ import time
 import cv2
 import numpy as np
 
-CONFIG_FILE = "hsv_config.json"
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hsv_config.json")
 
 DEFAULT_CONFIG = {
     "Red": {
@@ -390,7 +390,16 @@ def main():
                 perimeter = cv2.arcLength(cnt, True)
                 circularity = (4.0 * np.pi * area) / (perimeter * perimeter) if perimeter > 0 else 0
                 bx, by, bw, bh = cv2.boundingRect(cnt)
-                shape_str = "Circle" if circularity >= 0.70 else "Rect"
+                if circularity >= 0.65:
+                    shape_str = "Circle"
+                else:
+                    aspect = float(bw) / float(bh) if bh > 0 else 1.0
+                    if 0.85 <= aspect <= 1.18:
+                        shape_str = "Square"
+                    elif aspect > 1.18:
+                        shape_str = "Rect_H"
+                    else:
+                        shape_str = "Rect_V"
                 cv2.rectangle(contours_view, (bx, by), (bx + bw, by + bh), (0, 255, 0), 2)
                 cv2.putText(contours_view, f"{shape_str} A:{int(area)}", (bx, max(15, by - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
 

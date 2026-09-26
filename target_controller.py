@@ -23,26 +23,87 @@ if hasattr(sys.stderr, "reconfigure"):
 # ออกแบบฟังก์ชันให้อ่านง่าย เป็นระเบียบ ชัดเจน และนำไปเรียกใช้จาก main.py ได้ทันที
 # ==============================================================================
 
-AVAILABLE_COLORS = [
-    ("Red", "สีแดง", "#FF4444", (0, 0, 255)),
-    ("Green", "สีเขียว", "#2ECC71", (0, 255, 0)),
-    ("Blue", "สีน้ำเงิน", "#3498DB", (255, 130, 0)),
-    ("Yellow", "สีเหลือง", "#F1C40F", (0, 220, 255))
-]
+def resolve_config_path(config_file="hsv_config.json"):
+    """ค้นหาไฟล์คอนฟิกทั้งแบบ Absolute และ Relative เทียบกับโฟลเดอร์สคริปต์"""
+    if os.path.isabs(config_file) and os.path.exists(config_file):
+        return config_file
+    if os.path.exists(config_file):
+        return os.path.abspath(config_file)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    cand = os.path.join(base_dir, config_file)
+    if os.path.exists(cand):
+        return cand
+    return config_file
+
+
+def load_hsv_configs(config_file="hsv_config.json"):
+    """โหลดค่า Lower/Upper HSV จากไฟล์ json (hsv_config.json)"""
+    resolved_path = resolve_config_path(config_file)
+    if os.path.exists(resolved_path):
+        try:
+            with open(resolved_path, "r", encoding="utf-8") as f:
+                raw_cfg = json.load(f)
+            configs = {}
+            for color_name, data in raw_cfg.items():
+                ranges = []
+                for r in data.get("ranges", []):
+                    ranges.append((
+                        np.array(r["lower"], dtype=np.uint8),
+                        np.array(r["upper"], dtype=np.uint8)
+                    ))
+                configs[color_name] = {
+                    "ranges": ranges,
+                    "draw_color": tuple(data.get("draw_color", [0, 255, 0])),
+                    "led_rgb": tuple(data.get("led_rgb", [255, 255, 255])),
+                    "name_th": data.get("name_th", color_name)
+                }
+            print(f">> [HSV CONFIG] โหลดค่า HSV จาก '{resolved_path}' สำเร็จ ({len(configs)} สี)")
+            return configs
+        except Exception as e:
+            print(f"[!] โหลด {resolved_path} ไม่สำเร็จ: {e}")
+
+    # Fallback เริ่มต้นตามมาตรฐานที่จูนไว้ใน hsv_config.json
+    print("[!] ใช้ค่า Fallback HSV ตามมาตรฐาน hsv_config.json")
+    return {
+        "Red": {"ranges": [(np.array([0, 100, 70]), np.array([10, 255, 255])), (np.array([165, 100, 70]), np.array([180, 255, 255]))], "draw_color": (0, 0, 255), "led_rgb": (255, 0, 0), "name_th": "แดง"},
+        "Green": {"ranges": [(np.array([55, 92, 52]), np.array([93, 255, 110]))], "draw_color": (0, 255, 0), "led_rgb": (0, 255, 0), "name_th": "เขียว"},
+        "Blue": {"ranges": [(np.array([95, 79, 49]), np.array([130, 217, 110]))], "draw_color": (255, 130, 0), "led_rgb": (0, 100, 255), "name_th": "น้ำเงิน"},
+        "Yellow": {"ranges": [(np.array([20, 155, 100]), np.array([35, 255, 255]))], "draw_color": (0, 220, 255), "led_rgb": (255, 255, 0), "name_th": "เหลือง"}
+    }
+
+
+def get_color_mappings(config_file="hsv_config.json"):
+    """แปลงค่าจาก hsv_config.json เพื่อใช้งานใน UI และแมปปิ้งชื่อภาษาไทย"""
+    cfg = load_hsv_configs(config_file)
+    hex_fallback = {
+        "Red": "#FF4444",
+        "Green": "#2ECC71",
+        "Blue": "#3498DB",
+        "Yellow": "#F1C40F"
+    }
+    available_colors = []
+    color_th_map = {"ALL": "ทุกสี"}
+    for cname, cdata in cfg.items():
+        th = cdata.get("name_th", cname)
+        cth = f"สี{th}" if not th.startswith("สี") else th
+        led_rgb = cdata.get("led_rgb", (255, 255, 255))
+        chex = hex_fallback.get(cname, f"#{led_rgb[0]:02x}{led_rgb[1]:02x}{led_rgb[2]:02x}")
+        draw_color = cdata.get("draw_color", (0, 255, 0))
+        available_colors.append((cname, cth, chex, draw_color))
+        color_th_map[cname] = cth
+    return available_colors, color_th_map
+
+
+# โหลดรายการสีและชื่อภาษาไทยจาก hsv_config.json โดยตรง
+AVAILABLE_COLORS, COLOR_TH_MAP = get_color_mappings()
 
 AVAILABLE_SHAPES = [
     ("Circle", "ทรงกลม", "🔘"),
     ("Square", "สี่เหลี่ยมจัตุรัส", "⬛"),
-    ("Rectangle", "สี่เหลี่ยมผืนผ้า", "▰")
+    ("Rect_H", "ผืนผ้านอน", "▰"),
+    ("Rect_V", "ผืนผ้าตั้ง", "▮"),
+    ("Rectangle", "ผืนผ้าทั้งหมด", "▭")
 ]
-
-COLOR_TH_MAP = {
-    "Red": "สีแดง",
-    "Green": "สีเขียว",
-    "Blue": "สีน้ำเงิน",
-    "Yellow": "สีเหลือง",
-    "ALL": "ทุกสี"
-}
 
 SHAPE_TH_MAP = {
     "Circle": "ทรงกลม",
@@ -176,42 +237,10 @@ class TargetMemory:
 
 
 
-def load_hsv_configs(config_file="hsv_config.json"):
-    """โหลดค่า Lower/Upper HSV จากไฟล์ json"""
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, "r", encoding="utf-8") as f:
-                raw_cfg = json.load(f)
-            configs = {}
-            for color_name, data in raw_cfg.items():
-                ranges = []
-                for r in data.get("ranges", []):
-                    ranges.append((
-                        np.array(r["lower"], dtype=np.uint8),
-                        np.array(r["upper"], dtype=np.uint8)
-                    ))
-                configs[color_name] = {
-                    "ranges": ranges,
-                    "draw_color": tuple(data.get("draw_color", [0, 255, 0])),
-                    "led_rgb": tuple(data.get("led_rgb", [255, 255, 255])),
-                    "name_th": data.get("name_th", color_name)
-                }
-            print(f">> [CONFIG] โหลดค่า HSV จาก '{config_file}' สำเร็จ")
-            return configs
-        except Exception as e:
-            print(f"[!] โหลด {config_file} ไม่สำเร็จ: {e}")
-
-    # Fallback เริ่มต้น
-    return {
-        "Red": {"ranges": [(np.array([0, 100, 70]), np.array([10, 255, 255])), (np.array([165, 100, 70]), np.array([180, 255, 255]))], "draw_color": (0, 0, 255), "led_rgb": (255, 0, 0), "name_th": "แดง"},
-        "Green": {"ranges": [(np.array([35, 80, 70]), np.array([85, 255, 255]))], "draw_color": (0, 255, 0), "led_rgb": (0, 255, 0), "name_th": "เขียว"},
-        "Blue": {"ranges": [(np.array([95, 100, 70]), np.array([130, 255, 255]))], "draw_color": (255, 130, 0), "led_rgb": (0, 100, 255), "name_th": "น้ำเงิน"},
-        "Yellow": {"ranges": [(np.array([20, 100, 100]), np.array([35, 255, 255]))], "draw_color": (0, 220, 255), "led_rgb": (255, 255, 0), "name_th": "เหลือง"}
-    }
 
 
 def classify_shape(cnt):
-    """วิเคราะห์รูปทรง: Circle (กลม), Square (จัตุรัส), Rectangle (ผืนผ้า)"""
+    """วิเคราะห์รูปทรง: Circle (กลม), Square (จัตุรัส), Rect_H (ผืนผ้านอน), Rect_V (ผืนผ้าตั้ง)"""
     area = cv2.contourArea(cnt)
     if area < MIN_CONTOUR_AREA:
         return None
@@ -230,18 +259,20 @@ def classify_shape(cnt):
     bbox_area = bw * bh
     extent = area / bbox_area if bbox_area > 0 else 0
 
-    # ทรงกลม
-    if circularity >= 0.68 and circle_ratio >= 0.66:
-        return "Circle"
-
-    # สี่เหลี่ยม
+    # 1. ตรวจสอบสี่เหลี่ยม (จัตุรัส / ผืนผ้านอน / ผืนผ้าตั้ง)
     is_4_corners = (len(approx) == 4) and cv2.isContourConvex(approx)
-    if (is_4_corners and extent >= 0.65) or (extent >= 0.75 and len(approx) in (4, 5)):
+    if (is_4_corners and extent >= 0.65) or (len(approx) in (4, 5) and extent >= 0.78):
         aspect = float(bw) / float(bh)
         if 0.85 <= aspect <= 1.18:
             return "Square"
+        elif aspect > 1.18:
+            return "Rect_H"
         else:
-            return "Rectangle"
+            return "Rect_V"
+
+    # 2. ตรวจสอบทรงกลม (ปรับเกณฑ์ให้ครอบคลุมเป้ากลมที่อาจบิดเบี้ยวเล็กน้อยตามมุมกล้อง)
+    if circularity >= 0.60 and circle_ratio >= 0.58:
+        return "Circle"
 
     return None
 
@@ -281,12 +312,25 @@ def detect_targets(img, color_filter="Red", shape_filter="Circle", hsv_configs=N
                 continue
 
             if shape_filter != "ALL":
-                if shape_filter == "Square" and shape != "Square":
-                    continue
-                elif shape_filter == "Circle" and shape != "Circle":
-                    continue
-                elif shape_filter == "Rectangle" and shape not in ("Square", "Rectangle"):
-                    continue
+                if isinstance(shape_filter, (list, tuple, set)):
+                    if shape not in shape_filter:
+                        if "Rectangle" in shape_filter and shape in ("Rect_H", "Rect_V"):
+                            pass
+                        else:
+                            continue
+                else:
+                    if shape_filter in ("Square", "สี่เหลี่ยมจัตุรัส") and shape != "Square":
+                        continue
+                    elif shape_filter in ("Circle", "ทรงกลม") and shape != "Circle":
+                        continue
+                    elif shape_filter in ("Rect_H", "Horizontal", "ผืนผ้านอน", "สี่เหลี่ยมผืนผ้าแนวนอน") and shape != "Rect_H":
+                        continue
+                    elif shape_filter in ("Rect_V", "Vertical", "ผืนผ้าตั้ง", "สี่เหลี่ยมผืนผ้าแนวตั้ง") and shape != "Rect_V":
+                        continue
+                    elif shape_filter in ("Rectangle", "สี่เหลี่ยมผืนผ้า", "ผืนผ้าทั้งหมด") and shape not in ("Rectangle", "Rect_H", "Rect_V"):
+                        continue
+                    elif shape_filter not in ("Square", "Circle", "Rect_H", "Rect_V", "Rectangle", "ALL") and shape != shape_filter:
+                        continue
 
             M = cv2.moments(cnt)
             if M["m00"] == 0:
@@ -295,6 +339,10 @@ def detect_targets(img, color_filter="Red", shape_filter="Circle", hsv_configs=N
             cx = int(M["m10"] / M["m00"])
             cy = int(M["m01"] / M["m00"])
             bx, by, bw, bh = cv2.boundingRect(cnt)
+
+            shape_th = SHAPE_TH_MAP.get(shape, shape)
+            color_th = color_cfg.get("name_th", color_name)
+            name_th = f"{shape_th} สี{color_th}" if not color_th.startswith("สี") else f"{shape_th} {color_th}"
 
             targets.append({
                 "color": color_name,
@@ -305,7 +353,7 @@ def detect_targets(img, color_filter="Red", shape_filter="Circle", hsv_configs=N
                 "bbox": (bx, by, bw, bh),
                 "draw_color": color_cfg["draw_color"],
                 "led_rgb": color_cfg["led_rgb"],
-                "name_th": f"{shape}{color_cfg['name_th']}"
+                "name_th": name_th
             })
 
     # เรียงลำดับจากซ้ายไปขวาตามพิกัด X (center_x จากน้อยไปมาก) เสมอ
@@ -342,8 +390,8 @@ def sleep_with_stream(ep_camera, window_name, duration, overlay_text=""):
             time.sleep(0.01)
 
 
-def fire_double_shot(ep_blaster, ep_led, ep_camera=None, window_name="RoboMaster Auto Target Mission", count=2, enable_fire=True):
-    """ยิงเฉพาะกระสุนเจลจริง (WATER_FIRE) เท่านั้น ไม่ใช้อินฟราเรด และปิดไฟอินฟราเรดหัวปืน 100%"""
+def fire_double_shot(ep_blaster, ep_led, ep_camera=None, window_name="RoboMaster Auto Target Mission", count=2, enable_fire=True, led_rgb=None):
+    """ยิงเฉพาะกระสุนเจลจริง (WATER_FIRE) เท่านั้น ไม่ใช้อินฟราเรด และปิดไฟอินฟราเรดหัวปืน 100% พร้อมเปิดไฟ LED ตามสีเป้าหมายจาก hsv_config.json"""
     if not enable_fire:
         print("\n>> [FIRE SAFE] โหมดปลอดภัย (เล็งอย่างเดียว ไม่ยิงกระสุนจริง)")
         if ep_camera:
@@ -360,9 +408,10 @@ def fire_double_shot(ep_blaster, ep_led, ep_camera=None, window_name="RoboMaster
     except Exception:
         pass
 
-    # กะพริบไฟ LED ตัวหุ่น (COMP_TOP_ALL) เพื่อแสดงจังหวะการยิง
+    # กะพริบไฟ LED ตัวหุ่น (COMP_TOP_ALL) ตามสีเป้าหมายจาก hsv_config.json เพื่อแสดงจังหวะการยิง
+    fire_rgb = led_rgb if led_rgb is not None else (255, 50, 0)
     try:
-        ep_led.set_led(comp=led.COMP_TOP_ALL, r=255, g=50, b=0, effect=led.EFFECT_ON)
+        ep_led.set_led(comp=led.COMP_TOP_ALL, r=fire_rgb[0], g=fire_rgb[1], b=fire_rgb[2], effect=led.EFFECT_ON)
     except Exception:
         pass
 
@@ -608,6 +657,12 @@ def track_and_lock_target(ep_camera, ep_gimbal, ep_led, color_name, shape_name, 
 
                 if hold_dur >= LOCK_HOLD_TIME:
                     print(f"🎯 [LOCKED!] ล็อกเป้าหมาย #{target_index}/{total_targets} นิ่งตรงกลางจอเรียบร้อยแล้ว!")
+                    if ep_led and target and "led_rgb" in target:
+                        r_c, g_c, b_c = target["led_rgb"]
+                        try:
+                            ep_led.set_led(comp=led.COMP_TOP_ALL, r=r_c, g=g_c, b=b_c, effect=led.EFFECT_ON)
+                        except Exception:
+                            pass
                     return True, target
             else:
                 lock_start = None
@@ -737,7 +792,8 @@ def run_auto_shooting_mission(ep_robot, color_name="Red", shape_name="Circle", s
                     ep_camera=ep_camera,
                     window_name=window_name,
                     count=shots_per_target,
-                    enable_fire=enable_fire
+                    enable_fire=enable_fire,
+                    led_rgb=locked_target.get("led_rgb") if locked_target else None
                 )
                 shot_count += 1
                 print(f"✅ ยิงเป้าหมาย #{shot_count} สำเร็จ!")
