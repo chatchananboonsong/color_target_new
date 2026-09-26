@@ -68,7 +68,7 @@ source .venv/bin/activate
 ### 2) ติดตั้ง dependency
 
 ```powershell
-cd .\color_target\
+cd .\color_target_new\
 ```
 
 ```powershell
